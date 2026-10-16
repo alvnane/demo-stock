@@ -102,7 +102,7 @@
     </div>
 </div>
 
-<!-- 2. 실제 재고 검색 화면 (비밀번호 맞추기 전에는 숨겨짐) -->
+<!-- 2. 실제 재고 검색 화면 -->
 <div id="mainScreen" class="container">
     <div class="header">
         <h2>📦 DEMO 재고 운영 현황</h2>
@@ -116,26 +116,126 @@
 </div>
 
 <script>
-    // ★ [중요] 여기에 우리 회사 직원들에게 알려줄 비밀번호를 설정하세요!
-    const CORRECT_PASSWORD = "1234utb"; // 원하시는 비밀번호로 변경 가능합니다.
+    // 회사 비밀번호 설정 (원하시는 문자로 변경 가능합니다)
+    const CORRECT_PASSWORD = "1234";
 
     function checkPassword() {
         const inputVal = document.getElementById("passwordInput").value;
         if(inputVal === CORRECT_PASSWORD) {
             document.getElementById("loginScreen").style.display = "none";
             document.getElementById("mainScreen").style.display = "block";
-            loadData(); // 비밀번호가 맞을 때만 데이터를 불러옵니다.
+            loadData(); // 로그인이 맞을 때만 데이터를 불러옵니다.
         } else {
             document.getElementById("errorMsg").style.display = "block";
         }
     }
 
     let stockData = [];
-    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSZ2HcaXc6zdm_RXnS9f-YYOsPxYpdhk6-fGvSuMoJeM-x1mlSbQtGffzbE895VmNg8_YMKfKqXLT_Y/pub?gid=736675046&single=true&output=csv'; // 혹은 기존에 잘 불러와지던 데이터 연동
+    
+    // 구글 시트 CSV 링크가 정상적으로 포함되었습니다.
+    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSZ2HcaXc6zdm_RXnS9f-YYOsPxYpdhk6-fGvSuMoJeM-x1mlSbQtGffzbE895VmNg8_YMKfKqXLT_Y/pub?gid=736675046&single=true&output=csv';
 
-    // 이전 버전에서 정상 작동하던 초기 데이터 또는 구글시트 연동 로직
-    const initialData = [{"제조사": "SCAPE", "구분": "ETC", "적용모델": "X5", "모델명": "CART", "sn": "0804418996", "재고": "SCAPE", "현황": "사무실", "병원명": "-", "담당대리점": "-", "담당자": "-", "기타": "현금담보 x"}];
-    // (참고: 구글 시트 데이터를 불러오는 방식을 기존에 쓰셨던 코드로 유지하시면 됩니다.)
+    async function loadData() {
+        try {
+            const response = await fetch(CSV_URL);
+            const csvText = await response.text();
+            parseCSV(csvText);
+        } catch (error) {
+            console.error("데이터 로딩 실패:", error);
+            document.getElementById("stockList").innerHTML = `<div class="no-result">데이터를 불러오지 못했습니다. 링크를 확인해주세요.</div>`;
+        }
+    }
+
+    function parseCSV(text) {
+        const lines = text.split("\n");
+        stockData = [];
+        for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            const cols = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.trim().replace(/^"\vert{}"$/g, ''));
+            if(cols.length >= 8) {
+                stockData.push({
+                    제조사: cols[1] || '',
+                    구분: cols[2] || '',
+                    적용모델: cols[3] || '',
+                    모델명: cols[4] || '',
+                    sn: cols[5] || '',
+                    재고: cols[6] || '',
+                    현황: cols[7] || '',
+                    병원명: cols[11] || '-',
+                    담당대리점: cols[12] || '-',
+                    담당자: cols[13] || '-',
+                    기타: cols[14] || '-'
+                });
+            }
+        }
+        displayData(stockData);
+    }
+
+    function displayData(data) {
+        const listDiv = document.getElementById("stockList");
+        const total = data.length;
+        const office = data.filter(item => String(item.현황).includes("사무실")).length;
+
+        document.getElementById("totalCount").innerText = total;
+        document.getElementById("officeCount").innerText = office;
+
+        if(data.length === 0) {
+            listDiv.innerHTML = `<div class="no-result">일치하는 재고가 없습니다.</div>`;
+            return;
+        }
+
+        let html = "";
+        data.forEach((item, index) => {
+            html += `
+                <div class="card" onclick="toggleDetail(${index}, this)">
+                    <div class="card-summary">
+                        <div class="item-main">
+                            <span class="model-name">${item.모델명 || '-'}</span>
+                            <span class="sub-model">적용모델: ${item.적용모델 || '-'}</span>
+                            <span class="sn-text">S/N: ${item.sn || '-'}</span>
+                        </div>
+                        <div class="location-text">
+                            <span>${item.현황 || '미지정'}</span>
+                            <span>▼</span>
+                        </div>
+                    </div>
+                    <div class="card-detail">
+                        <div class="info-grid">
+                            <div class="info-item"><span class="label">적용모델</span><span class="value">${item.적용모델 || '-'}</span></div>
+                            <div class="info-item"><span class="label">제조사</span><span class="value">${item.제조사 || '-'}</span></div>
+                            <div class="info-item"><span class="label">구분</span><span class="value">${item.구분 || '-'}</span></div>
+                            <div class="info-item"><span class="label">재고</span><span class="value">${item.재고 || '-'}</span></div>
+                            <div class="info-item full"><span class="label">병원명</span><span class="value">${item.병원명}</span></div>
+                            <div class="info-item"><span class="label">담당대리점</span><span class="value">${item.담당대리점}</span></div>
+                            <div class="info-item"><span class="label">담당자</span><span class="value">${item.담당자}</span></div>
+                            ${item.기타 !== '-' ? `<div class="info-item full"><span class="label">기타</span><span class="value" style="color:#d97706;">${item.기타}</span></div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        listDiv.innerHTML = html;
+    }
+
+    function toggleDetail(index, element) {
+        element.classList.toggle("active");
+    }
+
+    function filterStock() {
+        const keyword = document.getElementById("searchInput").value.toLowerCase().trim();
+        if(!keyword) {
+            displayData(stockData);
+            return;
+        }
+        
+        const filtered = stockData.filter(item => {
+            const modelMatch = String(item.모델명).toLowerCase().includes(keyword);
+            const snMatch = String(item.sn).toLowerCase().includes(keyword);
+            return modelMatch || snMatch;
+        });
+
+        displayData(filtered);
+    }
 </script>
 
 </body>
