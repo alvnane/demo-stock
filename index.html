@@ -61,7 +61,7 @@
             background: var(--card-bg); border-radius: 10px; border: 1px solid var(--border-color);
             margin-bottom: 8px; overflow: hidden; transition: all 0.2s;
         }
-        /* 예약된 경우 카드 색상 변경 */
+        /* 예약된 경우 카드 색상 변경 (붉은빛 톤) */
         .card.is-reserved {
             background-color: var(--reserved-bg);
             border-color: var(--reserved-border);
@@ -167,7 +167,7 @@
             const cols = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.trim().replace(/^"\vert{}"$/g, ''));
             if(cols.length >= 8) {
                 stockData.push({
-                    index: i, // 구글 시트 행 번호
+                    index: i,
                     제조사: cols[1] || '',
                     구분: cols[2] || '',
                     적용모델: cols[3] || '',
@@ -206,13 +206,13 @@
         data.forEach((item) => {
             const isReserved = item.예약상태 === "예약됨";
             const cardClass = isReserved ? "card is-reserved" : "card";
-            const badge = isReserved ? `<span class="reserved-badge">예약중 (${item.사용날짜})</span>` : '';
+            const badge = isReserved ? `<span class="reserved-badge" id="badge-${item.index}">예약중 (${item.사용날짜})</span>` : `<span class="reserved-badge" id="badge-${item.index}" style="display:none;"></span>`;
 
             html += `
                 <div class="${cardClass}" id="card-${item.index}">
                     <div class="card-summary" onclick="toggleDetail(${item.index})">
                         <div class="item-main">
-                            <span class="model-name">${item.모델명 || '-'}${badge}</span>
+                            <span class="model-name"><span id="model-text-${item.index}">${item.모델명 || '-'}</span>${badge}</span>
                             <span class="sub-model">적용모델: ${item.적용모델 || '-'}</span>
                             <span class="sn-text">S/N: ${item.sn || '-'}</span>
                         </div>
@@ -234,9 +234,9 @@
                         </div>
 
                         <!-- 예약 입력 및 취소 영역 -->
-                        <div class="reservation-section">
+                        <div class="reservation-section" id="res-section-${item.index}">
                             ${isReserved ? `
-                                <div style="font-size:0.85rem; color:#991b1b; font-weight:500;">
+                                <div style="font-size:0.85rem; color:#991b1b; font-weight:500;" id="res-info-${item.index}">
                                     📌 예약 정보: ${item.사용날짜} / 담당: ${item.예약담당자} / 병원: ${item.예약병원명}
                                 </div>
                                 <button class="cancel-btn" onclick="cancelReservation(${item.index})">예약 취소하기</button>
@@ -280,7 +280,7 @@
         displayData(filtered);
     }
 
-    // 예약 실행 함수 (실제 운영 시 구글 앱스 스크립트 연동 또는 폼 전송 활용)
+    // [즉시 반영형] 예약하기 버튼 클릭 시 화면 색상 및 UI 변경
     function makeReservation(index) {
         const manager = document.getElementById(`manager-${index}`).value.trim();
         const date = document.getElementById(`date-${index}`).value;
@@ -291,14 +291,53 @@
             return;
         }
 
-        alert(`[예약 완료]\n담당자: ${manager}\n날짜: ${date}\n병원: ${hospital}\n\n※ 구글 시트 연동 후 저장됩니다.`);
-        // 실제 데이터 반영 로직 (구글 앱스 스크립트 웹앱 주소 연동 필요)
+        // 1. 해당 카드 요소 선택
+        const cardDiv = document.getElementById(`card-${index}`);
+        const badgeSpan = document.getElementById(`badge-${index}`);
+        const resSection = document.getElementById(`res-section-${index}`);
+
+        // 2. 카드 배경색을 붉은빛(예약 상태)으로 변경
+        cardDiv.classList.add("is-reserved");
+
+        // 3. 상단 모델명 옆에 '예약중' 뱃지 표시
+        badgeSpan.style.display = "inline-block";
+        badgeSpan.innerText = `예약중 (${date})`;
+
+        // 4. 상세 안의 입력창을 지우고 '예약 취소 버튼'과 '예약 정보'로 즉시 교체
+        resSection.innerHTML = `
+            <div style="font-size:0.85rem; color:#991b1b; font-weight:500;" id="res-info-${index}">
+                📌 예약 정보: ${date} / 담당: ${manager} / 병원: ${hospital}
+            </div>
+            <button class="cancel-btn" onclick="cancelReservation(${index})">예약 취소하기</button>
+        `;
+
+        alert("예약이 완료되었습니다! 화면에 즉시 반영되었습니다.");
     }
 
+    // [즉시 반영형] 예약 취소하기 버튼 클릭 시 원래 상태로 복구
     function cancelReservation(index) {
         if(confirm("예약을 취소하시겠습니까?")) {
+            const cardDiv = document.getElementById(`card-${index}`);
+            const badgeSpan = document.getElementById(`badge-${index}`);
+            const resSection = document.getElementById(`res-section-${index}`);
+
+            // 1. 예약 색상 제거
+            cardDiv.classList.remove("is-reserved");
+
+            // 2. 뱃지 숨기기
+            badgeSpan.style.display = "none";
+
+            // 3. 상세 안의 내용을 다시 입력창과 '예약하기 버튼'으로 복구
+            resSection.innerHTML = `
+                <div class="reservation-inputs">
+                    <input type="text" id="manager-${index}" placeholder="담당자 이름">
+                    <input type="date" id="date-${index}">
+                </div>
+                <input type="text" id="hospital-${index}" placeholder="예약 병원명">
+                <button class="reserve-btn" onclick="makeReservation(${index})">예약하기</button>
+            `;
+
             alert("예약이 취소되었습니다.");
-            // 예약 취소 반영 로직
         }
     }
 </script>
